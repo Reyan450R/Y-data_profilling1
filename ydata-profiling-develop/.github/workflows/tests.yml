@@ -1,0 +1,185 @@
+name: Multi-software test
+
+on:
+  pull_request:
+  push:
+    branches:
+    - master
+    - develop
+
+env:
+  YDATA_PROFILING_NO_ANALYTICS: false
+
+jobs:
+  test:
+    name: Tests
+    strategy:
+      matrix:
+        os: [ ubuntu-22.04 ]
+        python-version: ["3.9", "3.10", "3.11", "3.12" ]
+        pandas: [ "pandas>1.1" ]
+        numpy: [ "numpy>=1.21" ]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+        architecture: x64
+    
+    - uses: actions/cache@v4
+      if: startsWith(runner.os, 'Linux')
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-${{ matrix.pandas }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ matrix.pandas }}-pip-
+    - uses: actions/cache@v4
+      if: startsWith(runner.os, 'macOS')
+      with:
+        path: ~/Library/Caches/pip
+        key: ${{ runner.os }}-${{ matrix.pandas }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ matrix.pandas }}-pip-
+    - uses: actions/cache@v4
+      if: startsWith(runner.os, 'Windows')
+      with:
+        path: ~\AppData\Local\pip\Cache
+        key: ${{ runner.os }}-${{ matrix.pandas }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ matrix.pandas }}-pip-
+    - run: |
+        pip install --upgrade pip setuptools wheel
+        pip install ".[test]" "${{ matrix.pandas }}" "${{ matrix.numpy }}"
+    - run: echo "YDATA_PROFILING_NO_ANALYTICS=False" >> $GITHUB_ENV
+    - run: make install
+
+    - run: make test
+
+  coverage:
+    name: Coverage
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-22.04]
+        python-version: ["3.12"]
+        pandas: [ "pandas>1.1" ]
+        numpy: [ "numpy>=1.21" ]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+        architecture: x64
+
+    - uses: actions/cache@v4
+      if: startsWith(runner.os, 'Linux')
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-${{ matrix.pandas }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ matrix.pandas }}-pip-
+    - uses: actions/cache@v4
+      if: startsWith(runner.os, 'macOS')
+      with:
+        path: ~/Library/Caches/pip
+        key: ${{ runner.os }}-${{ matrix.pandas }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ matrix.pandas }}-pip-
+    - uses: actions/cache@v4
+      if: startsWith(runner.os, 'Windows')
+      with:
+        path: ~\AppData\Local\pip\Cache
+        key: ${{ runner.os }}-${{ matrix.pandas }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ matrix.pandas }}-pip-
+    - run: |
+        pip install --upgrade pip setuptools wheel
+        pip install ".[test]" "${{ matrix.pandas }}" "${{ matrix.numpy }}"
+        echo "YDATA_PROFILING_NO_ANALYTICS=False" >> $GITHUB_ENV
+    - run: make install
+
+    - run: make test_cov
+
+    - uses: actions/cache@v4
+      if: startsWith(runner.os, 'Windows')
+      with:
+        path: ~\AppData\Local\pip\Cache
+        key: ${{ runner.os }}-${{ matrix.pandas }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ matrix.pandas }}-pip-
+    - run: |
+        pip install --upgrade pip setuptools wheel
+        pip install ".[test]" "${{ matrix.pandas }}" "${{ matrix.numpy }}"
+    - run: make install
+    - run: make test_cov
+    - run: codecov -F py${{ matrix.python-version }}-${{ matrix.os }}-${{ matrix.pandas }}-${{ matrix.numpy }}
+
+  test_spark:
+    runs-on: ${{ matrix.os }}
+    continue-on-error: True
+    strategy:
+      matrix:
+        os: [ ubuntu-22.04 ]
+        python-version: [3.8]
+        pandas: ["pandas>1.1"]
+        spark: ["3.0.1"]
+        hadoop: [ 2.7 ]
+        numpy: ["numpy"]
+        java_home: [ /usr/lib/jvm/java-8-openjdk-amd64 ]
+
+    name: Tests Spark | python ${{ matrix.python-version }}, ${{ matrix.os }}, spark${{ matrix.spark }}, ${{ matrix.pandas }}, ${{ matrix.numpy }}
+    env:
+      JAVA_HOME: ${{ matrix.java_home }}
+      SPARK_VERSION: ${{ matrix.spark }}
+      HADOOP_VERSION: ${{ matrix.hadoop }}
+      SPARK_DIRECTORY: ${{ github.workspace }}/../
+      SPARK_HOME: ${{ github.workspace }}/../spark/
+      YDATA_PROFILING_NO_ANALYTICS: ${{ matrix.analytics }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          architecture: x64
+      - uses: actions/cache@v4
+        if: startsWith(runner.os, 'Linux')
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-${{ matrix.pandas }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.pandas }}-pip-\
+      - uses: actions/cache@v4
+        if: startsWith(runner.os, 'macOS')
+        with:
+          path: ~/Library/Caches/pip
+          key: ${{ runner.os }}-${{ matrix.pandas }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.pandas }}-pip-
+      - uses: actions/cache@v4
+        if: startsWith(runner.os, 'Windows')
+        with:
+          path: ~\AppData\Local\pip\Cache
+          key: ${{ runner.os }}-${{ matrix.pandas }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.pandas }}-pip-
+      - run: |
+          pip install --upgrade pip setuptools wheel
+          pip install pytest-spark>=0.6.0 pyarrow==1.0.1 pyspark=="${{ matrix.spark }}"
+          pip install ".[test]"
+          pip install "${{ matrix.pandas }}" "${{ matrix.numpy }}"
+      - if: ${{ matrix.spark != '3.0.1' }}
+        run: echo "ARROW_PRE_0_15_IPC_FORMAT=1" >> $GITHUB_ENV
+      - run: echo "SPARK_LOCAL_IP=127.0.0.1" >> $GITHUB_ENV
+      - run: make install
+      - run: make install-spark-ci
+      - run: pip install ".[spark]" # Make sure the proper version of pandas is install after everything
+      - run: make test_spark
+
